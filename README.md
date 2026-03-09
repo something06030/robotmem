@@ -1,14 +1,14 @@
-# robotmem — 让机器人从经验中学习
+# robotmem — Let Robots Learn from Experience
 
-> 机器人跑了 1000 次实验，每次都从零开始。robotmem 把每次 episode 的经验存起来——参数、轨迹、成败——下次自动检索最相关的经验指导决策。
+> Your robot ran 1000 experiments, starting from scratch every time. robotmem stores episode experiences — parameters, trajectories, outcomes — and retrieves the most relevant ones to guide future decisions.
 
-**FetchPush 实验验证**：+25% 成功率提升（42% → 67%），纯 CPU，5 分钟复现。
+**FetchPush experiment**: +25% success rate improvement (42% → 67%), CPU-only, reproducible in 5 minutes.
 
 <p align="center">
   <img src="examples/demo.gif" alt="robotmem 30s demo: save → restart → recall" width="600">
 </p>
 
-## 快速开始
+## Quick Start
 
 ```bash
 pip install robotmem
@@ -17,66 +17,66 @@ pip install robotmem
 ```python
 from robotmem import learn, recall, save_perception, start_session, end_session
 
-# 开始 episode
+# Start an episode
 session = start_session(context='{"robot_id": "arm-01", "task": "push"}')
 
-# 记录经验
+# Record experience
 learn(
-    insight="grip_force=12.5N 时抓取成功率最高",
+    insight="grip_force=12.5N yields highest grasp success rate",
     context='{"params": {"grip_force": {"value": 12.5, "unit": "N"}}, "task": {"success": true}}'
 )
 
-# 检索经验（支持结构化过滤 + 空间近邻）
+# Retrieve experiences (structured filtering + spatial nearest-neighbor)
 memories = recall(
-    query="抓取力参数",
+    query="grip force parameters",
     context_filter='{"task.success": true}',
     spatial_sort='{"field": "spatial.position", "target": [1.3, 0.7, 0.42]}'
 )
 
-# 存感知数据
+# Store perception data
 save_perception(
-    description="抓取轨迹: 30步, 成功",
+    description="Grasp trajectory: 30 steps, success",
     perception_type="procedural",
     data='{"sampled_actions": [[0.1, -0.3, 0.05, 0.8], ...]}'
 )
 
-# 结束 episode（自动巩固 + proactive recall）
+# End episode (auto-consolidation + proactive recall)
 end_session(session_id=session["session_id"])
 ```
 
-## 7 个 API
+## 7 APIs
 
-| API | 用途 |
-|-----|------|
-| `learn` | 记录物理经验（参数/策略/教训） |
-| `recall` | 检索经验 — BM25 + 向量混合搜索，支持 `context_filter` 和 `spatial_sort` |
-| `save_perception` | 存感知/轨迹/力矩（visual/tactile/proprioceptive/auditory/procedural） |
-| `forget` | 删除错误记忆 |
-| `update` | 修正记忆内容 |
-| `start_session` | 开始 Episode |
-| `end_session` | 结束 Episode（自动巩固 + proactive recall） |
+| API | Purpose |
+|-----|---------|
+| `learn` | Record physical experiences (parameters / strategies / lessons) |
+| `recall` | Retrieve experiences — BM25 + vector hybrid search with `context_filter` and `spatial_sort` |
+| `save_perception` | Store perception / trajectory / force data (visual / tactile / proprioceptive / auditory / procedural) |
+| `forget` | Delete incorrect memories |
+| `update` | Correct memory content |
+| `start_session` | Begin an episode |
+| `end_session` | End an episode (auto-consolidation + proactive recall) |
 
-## 核心能力
+## Key Features
 
-### 结构化经验检索
+### Structured Experience Retrieval
 
-不只是向量搜索——robotmem 理解机器人经验的结构：
+Not just vector search — robotmem understands the structure of robot experiences:
 
 ```python
-# 只检索成功经验
+# Retrieve only successful experiences
 recall(query="push to target", context_filter='{"task.success": true}')
 
-# 找最近的空间场景
+# Find spatially nearest scenarios
 recall(query="grasp object", spatial_sort='{"field": "spatial.object_position", "target": [1.3, 0.7, 0.42]}')
 
-# 组合: 成功 + 距离 < 0.05m
+# Combine: success + distance < 0.05m
 recall(
     query="push",
     context_filter='{"task.success": true, "params.final_distance.value": {"$lt": 0.05}}'
 )
 ```
 
-### context JSON 四分区
+### Context JSON — 4 Sections
 
 ```json
 {
@@ -87,51 +87,51 @@ recall(
 }
 ```
 
-`recall` 返回的每条记忆自动提取 `params`/`spatial`/`robot`/`task` 为顶层字段。
+Each recalled memory automatically extracts `params` / `spatial` / `robot` / `task` as top-level fields.
 
-### 记忆巩固 + Proactive Recall
+### Memory Consolidation + Proactive Recall
 
-`end_session` 自动触发：
-- **巩固**：Jaccard 相似度 > 0.50 的同类记忆合并（保护 constraint/postmortem/高 confidence）
-- **Proactive Recall**：返回历史相关记忆，供下个 episode 参考
+`end_session` automatically triggers:
+- **Consolidation**: Merges similar memories with Jaccard similarity > 0.50 (protects constraint / postmortem / high-confidence entries)
+- **Proactive Recall**: Returns historically relevant memories for the next episode
 
 ## FetchPush Demo
 
 ```bash
 cd examples/fetch_push
 pip install gymnasium-robotics
-PYTHONPATH=../../src python demo.py  # 90 episodes, ~2 分钟
+PYTHONPATH=../../src python demo.py  # 90 episodes, ~2 min
 ```
 
-三阶段实验：基线 → 记忆写入 → 记忆利用。预期 Phase C 成功率比 Phase A 高 10-20%。
+Three-phase experiment: baseline → memory writing → memory utilization. Expected Phase C success rate 10-20% higher than Phase A.
 
-## 架构
+## Architecture
 
 ```
 SQLite + FTS5 + vec0
-├── BM25 全文搜索（jieba CJK 分词）
-├── 向量搜索（FastEmbed ONNX，纯 CPU）
-├── RRF 融合排序
-├── 结构化过滤（context_filter）
-└── 空间近邻排序（spatial_sort）
+├── BM25 full-text search (jieba CJK tokenizer)
+├── Vector search (FastEmbed ONNX, CPU-only)
+├── RRF fusion ranking
+├── Structured filtering (context_filter)
+└── Spatial nearest-neighbor sorting (spatial_sort)
 ```
 
-- 纯 CPU，无 GPU 依赖
-- 单文件数据库 `~/.robotmem/memory.db`
-- MCP Server（7 个工具）或直接 Python import
-- Web 管理界面：`robotmem web`
+- CPU-only, no GPU required
+- Single-file database `~/.robotmem/memory.db`
+- MCP Server (7 tools) or direct Python import
+- Web management UI: `robotmem web`
 
-## 竞品对比
+## Comparison
 
-| 维度 | MemoryVLA (学术) | Mem0 (产品) | **robotmem** |
-|------|-----------------|-------------|-------------|
-| 目标用户 | 特定 VLA 模型 | 文本 AI | **机器人 AI** |
-| 记忆格式 | 向量（不可读） | 文本 | **自然语言 + 感知 + 参数** |
-| 结构化过滤 | 不支持 | 不支持 | **支持（context_filter）** |
-| 空间检索 | 不支持 | 不支持 | **支持（spatial_sort）** |
-| 物理参数 | 不支持 | 不支持 | **支持（params 分区）** |
-| 安装 | 论文代码编译 | pip install | **pip install** |
-| 数据库 | 内嵌 | 云服务 | **本地 SQLite** |
+| Feature | MemoryVLA (Academic) | Mem0 (Product) | **robotmem** |
+|---------|---------------------|----------------|-------------|
+| Target users | Specific VLA models | Text AI | **Robotic AI** |
+| Memory format | Vectors (opaque) | Text | **Natural language + perception + parameters** |
+| Structured filtering | No | No | **Yes (`context_filter`)** |
+| Spatial retrieval | No | No | **Yes (`spatial_sort`)** |
+| Physical parameters | No | No | **Yes (`params` section)** |
+| Installation | Compile from paper code | pip install | **pip install** |
+| Database | Embedded | Cloud | **Local SQLite** |
 
 ## License
 
