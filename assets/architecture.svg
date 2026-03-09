@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#00000020"/>
+    </filter>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" rx="12" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" font-size="20" font-weight="bold" fill="#0f172a">robotmem Architecture</text>
+
+  <!-- MCP Layer -->
+  <rect x="40" y="55" width="720" height="65" rx="10" fill="url(#greenGrad)" filter="url(#shadow)" opacity="0.95"/>
+  <text x="400" y="82" text-anchor="middle" font-size="15" font-weight="bold" fill="white">MCP Server — 6 Tools</text>
+  <text x="400" y="102" text-anchor="middle" font-size="12" fill="white" opacity="0.9">learn  |  recall  |  save_perception  |  forget  |  update  |  start/end_session</text>
+
+  <!-- Validation Layer -->
+  <rect x="40" y="135" width="720" height="45" rx="8" fill="url(#purpleGrad)" filter="url(#shadow)" opacity="0.9"/>
+  <text x="400" y="163" text-anchor="middle" font-size="13" font-weight="bold" fill="white">L1 Validation — Pydantic + @validate_args + @mcp_error_boundary</text>
+
+  <!-- Middle: Three columns -->
+  <!-- Search Engine -->
+  <rect x="40" y="200" width="230" height="170" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="40" y="200" width="230" height="35" rx="10" fill="url(#blueGrad)"/>
+  <rect x="40" y="225" width="230" height="10" fill="url(#blueGrad)"/>
+  <text x="155" y="222" text-anchor="middle" font-size="13" font-weight="bold" fill="white">Search Engine</text>
+  <text x="60" y="260" font-size="12" fill="#334155">BM25 Full-text (FTS5)</text>
+  <text x="60" y="282" font-size="12" fill="#334155">Vector Search (vec0)</text>
+  <text x="60" y="304" font-size="12" fill="#334155">RRF Fusion Ranking</text>
+  <text x="60" y="326" font-size="12" fill="#334155">context_filter (JSON)</text>
+  <text x="60" y="348" font-size="12" fill="#334155">spatial_sort (nearest)</text>
+
+  <!-- Ops Layer -->
+  <rect x="285" y="200" width="230" height="170" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="285" y="200" width="230" height="35" rx="10" fill="url(#blueGrad)"/>
+  <rect x="285" y="225" width="230" height="10" fill="url(#blueGrad)"/>
+  <text x="400" y="222" text-anchor="middle" font-size="13" font-weight="bold" fill="white">Operations</text>
+  <text x="305" y="260" font-size="12" fill="#334155">memories.py — CRUD</text>
+  <text x="305" y="282" font-size="12" fill="#334155">sessions.py — lifecycle</text>
+  <text x="305" y="304" font-size="12" fill="#334155">tags.py — tag mgmt</text>
+  <text x="305" y="326" font-size="12" fill="#334155">consolidate — dedup</text>
+  <text x="305" y="348" font-size="12" fill="#334155">conflict — detection</text>
+
+  <!-- Intelligence -->
+  <rect x="530" y="200" width="230" height="170" rx="10" fill="white" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="530" y="200" width="230" height="35" rx="10" fill="url(#blueGrad)"/>
+  <rect x="530" y="225" width="230" height="10" fill="url(#blueGrad)"/>
+  <text x="645" y="222" text-anchor="middle" font-size="13" font-weight="bold" fill="white">Intelligence</text>
+  <text x="550" y="260" font-size="12" fill="#334155">auto_classify (L0 regex)</text>
+  <text x="550" y="282" font-size="12" fill="#334155">dedup (3-layer)</text>
+  <text x="550" y="304" font-size="12" fill="#334155">embed (FastEmbed ONNX)</text>
+  <text x="550" y="326" font-size="12" fill="#334155">jieba CJK tokenizer</text>
+  <text x="550" y="348" font-size="12" fill="#334155">proactive recall</text>
+
+  <!-- Database Layer -->
+  <rect x="40" y="390" width="720" height="50" rx="10" fill="url(#amberGrad)" filter="url(#shadow)" opacity="0.95"/>
+  <text x="400" y="413" text-anchor="middle" font-size="14" font-weight="bold" fill="white">SQLite — ~/.robotmem/memory.db</text>
+  <text x="400" y="432" text-anchor="middle" font-size="12" fill="white" opacity="0.9">memories + memories_fts (FTS5) + memories_vec (vec0) + sessions + tags</text>
+
+  <!-- Bottom labels -->
+  <text x="155" y="470" text-anchor="middle" font-size="11" fill="#64748b">Pure CPU</text>
+  <text x="400" y="470" text-anchor="middle" font-size="11" fill="#64748b">Single File DB</text>
+  <text x="645" y="470" text-anchor="middle" font-size="11" fill="#64748b">No GPU Required</text>
+
+  <!-- Arrows -->
+  <line x1="400" y1="120" x2="400" y2="135" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrowPurple)"/>
+  <line x1="400" y1="180" x2="155" y2="200" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="400" y1="180" x2="400" y2="200" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="400" y1="180" x2="645" y2="200" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="155" y1="370" x2="155" y2="390" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="400" y1="370" x2="400" y2="390" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="645" y1="370" x2="645" y2="390" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>
+</svg>

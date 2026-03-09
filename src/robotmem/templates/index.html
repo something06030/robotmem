@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>robotmem — Robot Memory</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <h1 class="logo">robotmem</h1>
+            <span class="subtitle">Robot Memory Management</span>
+        </div>
+        <div class="header-right">
+            <button id="theme-toggle" class="btn btn-icon" title="切换主题">
+                <span class="icon-sun">&#9728;</span>
+                <span class="icon-moon" style="display:none">&#9790;</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="tabs">
+        <button class="tab active" data-tab="dashboard">Dashboard</button>
+        <button class="tab" data-tab="memories">Memories</button>
+        <button class="tab" data-tab="sessions">Sessions</button>
+        <button class="tab" data-tab="doctor">Doctor</button>
+    </nav>
+
+    <!-- Dashboard Tab -->
+    <main id="tab-dashboard" class="tab-content active">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total">-</div>
+                <div class="stat-label">Total Memories</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-facts">-</div>
+                <div class="stat-label">Facts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-perceptions">-</div>
+                <div class="stat-label">Perceptions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-recent">-</div>
+                <div class="stat-label">Last 24h</div>
+            </div>
+        </div>
+
+        <div class="dashboard-row">
+            <div class="card">
+                <h3>Category Distribution</h3>
+                <div id="category-list" class="kv-list"></div>
+            </div>
+            <div class="card">
+                <h3>Collections</h3>
+                <div id="collection-list" class="kv-list"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 12px;">
+            <h3>Recent Failures</h3>
+            <div id="recent-failures" class="failure-list"></div>
+        </div>
+    </main>
+
+    <!-- Memories Tab -->
+    <main id="tab-memories" class="tab-content">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search memories..." />
+                <button id="search-btn" class="btn btn-primary">Search</button>
+                <button id="clear-search" class="btn" style="display:none">Clear</button>
+                <button id="advanced-toggle" class="btn">Advanced</button>
+            </div>
+            <div class="filters">
+                <select id="filter-collection">
+                    <option value="">All Collections</option>
+                </select>
+                <select id="filter-type">
+                    <option value="">All Types</option>
+                    <option value="fact">Fact</option>
+                    <option value="perception">Perception</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Advanced Search Panel -->
+        <div id="advanced-search" class="advanced-panel">
+            <div class="filter-section">
+                <label>Category</label>
+                <div id="category-tags" class="tag-group"></div>
+            </div>
+            <div class="filter-section">
+                <label>Confidence</label>
+                <div class="range-row">
+                    <input type="range" id="filter-conf-min" min="0" max="100" value="0">
+                    <span id="conf-min-val">0%</span>
+                    <span class="range-sep">&mdash;</span>
+                    <input type="range" id="filter-conf-max" min="0" max="100" value="100">
+                    <span id="conf-max-val">100%</span>
+                </div>
+            </div>
+            <div class="filter-section filter-row-inline">
+                <div>
+                    <label>Time Range</label>
+                    <select id="filter-days">
+                        <option value="">All time</option>
+                        <option value="1">Last 24h</option>
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Perception Type</label>
+                    <select id="filter-perception-type">
+                        <option value="">All</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory List -->
+        <div id="memory-list" class="memory-list"></div>
+
+        <!-- Pagination -->
+        <div id="pagination" class="pagination"></div>
+
+    </main>
+
+    <!-- Sessions Tab -->
+    <main id="tab-sessions" class="tab-content">
+        <div id="session-list" class="session-list"></div>
+        <div id="session-pagination" class="pagination"></div>
+    </main>
+
+    <!-- Doctor Tab -->
+    <main id="tab-doctor" class="tab-content">
+        <div class="doctor-section">
+            <h3>Index Sync</h3>
+            <div class="health-grid">
+                <div class="health-item">
+                    <span class="health-icon" id="health-fts5-icon">-</span>
+                    <div class="health-info">
+                        <span class="health-label">FTS5 Full-Text Index</span>
+                        <span class="health-detail" id="health-fts5-detail">-</span>
+                    </div>
+                </div>
+                <div class="health-item">
+                    <span class="health-icon" id="health-vec0-icon">-</span>
+                    <div class="health-info">
+                        <span class="health-label">vec0 Vector Index</span>
+                        <span class="health-detail" id="health-vec0-detail">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="doctor-section">
+            <h3>Recall Effectiveness</h3>
+            <div class="health-grid">
+                <div class="health-item">
+                    <span class="health-icon" id="health-zero-icon">-</span>
+                    <div class="health-info">
+                        <span class="health-label">Zero-Hit Rate</span>
+                        <span class="health-detail" id="health-zero-detail">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="doctor-section">
+            <h3>Storage</h3>
+            <div class="doctor-stats">
+                <div class="doctor-stat-row">
+                    <span class="doctor-stat-label">Memories</span>
+                    <span class="doctor-stat-value" id="doctor-memories">-</span>
+                </div>
+                <div class="doctor-stat-row">
+                    <span class="doctor-stat-label">Facts</span>
+                    <span class="doctor-stat-value" id="doctor-facts">-</span>
+                </div>
+                <div class="doctor-stat-row">
+                    <span class="doctor-stat-label">Perceptions</span>
+                    <span class="doctor-stat-value" id="doctor-perceptions">-</span>
+                </div>
+                <div class="doctor-stat-row">
+                    <span class="doctor-stat-label">Sessions</span>
+                    <span class="doctor-stat-value" id="doctor-sessions">-</span>
+                </div>
+                <div class="doctor-stat-row">
+                    <span class="doctor-stat-label">DB Size</span>
+                    <span class="doctor-stat-value" id="health-db-size">-</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Memory Detail Modal (全局，不在 Tab 内) -->
+    <div id="memory-modal" class="modal" style="display:none">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Memory #<span id="modal-id"></span></h3>
+                <button class="btn btn-icon modal-close">&times;</button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+            <div class="modal-footer">
+                <button id="modal-delete" class="btn btn-danger">Delete</button>
+                <button class="btn modal-close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/memory.js"></script>
+</body>
+</html>

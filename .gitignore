@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs - 不上传策略和研究文档
+docs/
+
+# project-docs（本地资产，禁止提交）
+project-docs/
+
+# Logs
+*.log
+*.pid
+.observer_worker.pid
+observer_worker.log
+
+# npm
+node_modules/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Experiment data
+examples/**/.robotmem/
+
+# Claude internal
+.claude/skyeye_snapshot.md
+
+# Rust
+crate/target/
