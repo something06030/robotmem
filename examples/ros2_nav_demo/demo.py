@@ -119,7 +119,11 @@ class ExploreNode(Node):
 
 
 class NavNode(Node):
-    """Session 2: 沿记忆航点直线导航（含超时 + 卡住跳过）"""
+    """Session 2: 记忆导航（含避障：卡住后退转向再继续）"""
+
+    NAVIGATE = 0
+    BACKUP = 1
+    TURN = 2
 
     def __init__(self, waypoints, cmd_topic="/originbot_1/cmd_vel",
                  odom_topic="/originbot_1/odom", timeout=60.0):
@@ -131,14 +135,18 @@ class NavNode(Node):
         self.wps = waypoints
         self.idx = 0
         self.pos = None
+        self.prev_pos = None
         self.yaw = 0.0
         self.t0 = time.time()
         self.timeout = timeout
         self.positions = []
         self.done = False
-        self.wp_start_t = time.time()
-        self.wp_best_dist = float("inf")
         self.skipped = 0
+        self.state = self.NAVIGATE
+        self.state_t = time.time()
+        self.stuck_count = 0
+        self.wp_retries = 0
+        self.turn_dir = 1.0
 
     def _odom_cb(self, msg):
         p = msg.pose.pose.position
@@ -158,10 +166,15 @@ class NavNode(Node):
             f"导航{reason}: {t:.1f}s, {self.idx}/{len(self.wps)} 航点, "
             f"跳过 {self.skipped}")
 
+    def _next_wp(self):
+        self.idx += 1
+        self.stuck_count = 0
+        self.wp_retries = 0
+        self.state = self.NAVIGATE
+
     def _loop(self):
         if self.done or self.pos is None:
             return
-        # 全局超时
         if time.time() - self.t0 > self.timeout:
             self._finish("超时")
             return
@@ -169,41 +182,65 @@ class NavNode(Node):
             self._finish("完成")
             return
 
-        tx, ty = self.wps[self.idx]
-        cx, cy = self.pos
-        dist = math.hypot(tx - cx, ty - cy)
-
-        if dist < 0.3:
-            self.idx += 1
-            self.wp_start_t = time.time()
-            self.wp_best_dist = float("inf")
-            return
-
-        # 单航点卡住检测：5 秒没靠近就跳过
-        self.wp_best_dist = min(self.wp_best_dist, dist)
-        if time.time() - self.wp_start_t > 5.0 and dist >= self.wp_best_dist - 0.05:
-            self.get_logger().info(f"跳过航点 {self.idx}（卡住）")
-            self.skipped += 1
-            self.idx += 1
-            self.wp_start_t = time.time()
-            self.wp_best_dist = float("inf")
-            return
-
-        dy, dx = ty - cy, tx - cx
-        target_yaw = math.atan2(dy, dx)
-        err = target_yaw - self.yaw
-        while err > math.pi:
-            err -= 2 * math.pi
-        while err < -math.pi:
-            err += 2 * math.pi
-
+        now = time.time()
         cmd = Twist()
-        if abs(err) > 0.3:
-            cmd.angular.z = max(-1.0, min(1.0, 1.2 * err))
-            cmd.linear.x = 0.05
-        else:
-            cmd.linear.x = min(0.3, dist)
-            cmd.angular.z = 0.5 * err
+
+        if self.state == self.NAVIGATE:
+            tx, ty = self.wps[self.idx]
+            cx, cy = self.pos
+            dist = math.hypot(tx - cx, ty - cy)
+
+            if dist < 0.5:
+                self._next_wp()
+                return
+
+            # 位置变化检测卡住
+            if self.prev_pos:
+                d = math.hypot(self.pos[0] - self.prev_pos[0],
+                               self.pos[1] - self.prev_pos[1])
+                if d < 0.01:
+                    self.stuck_count += 1
+                else:
+                    self.stuck_count = 0
+
+            if self.stuck_count > 8:
+                self.wp_retries += 1
+                if self.wp_retries > 3:
+                    self.skipped += 1
+                    self._next_wp()
+                    return
+                self.state = self.BACKUP
+                self.state_t = now
+                self.turn_dir = random.choice([-1.0, 1.0])
+                self.stuck_count = 0
+            else:
+                # 朝航点导航
+                target_yaw = math.atan2(ty - cy, tx - cx)
+                err = target_yaw - self.yaw
+                while err > math.pi:
+                    err -= 2 * math.pi
+                while err < -math.pi:
+                    err += 2 * math.pi
+                if abs(err) > 0.3:
+                    cmd.angular.z = max(-1.0, min(1.0, 1.2 * err))
+                    cmd.linear.x = 0.05
+                else:
+                    cmd.linear.x = min(0.3, dist)
+                    cmd.angular.z = 0.5 * err
+
+        elif self.state == self.BACKUP:
+            cmd.linear.x = -0.2
+            if now - self.state_t > 1.0:
+                self.state = self.TURN
+                self.state_t = now
+
+        elif self.state == self.TURN:
+            cmd.angular.z = self.turn_dir * 1.0
+            if now - self.state_t > random.uniform(0.5, 1.5):
+                self.state = self.NAVIGATE
+                self.state_t = now
+
+        self.prev_pos = self.pos
         self.pub.publish(cmd)
 
 

@@ -93,7 +93,7 @@ class MetaWorldMemoryPolicy:
         )
 
     def _extract_params(self, memories):
-        """从成功记忆中学习最优参数"""
+        """从成功记忆中学习最优参数 — 平均成功经验"""
         if not memories:
             return {
                 "noise_scale": self.base_noise,
@@ -113,7 +113,7 @@ class MetaWorldMemoryPolicy:
                 speeds.append(spd["value"])
 
         return {
-            # 成功经验的参数 + 降低噪声
+            # 成功经验平均 + 适度降噪（保留一些探索）
             "noise_scale": self.base_noise * (1 - self.weight),
             "approach_offset": float(np.mean(offsets)) if offsets else 0.05,
             "push_speed": float(np.mean(speeds)) if speeds else 8.0,
