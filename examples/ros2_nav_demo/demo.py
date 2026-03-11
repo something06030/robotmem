@@ -21,6 +21,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from std_srvs.srv import Empty as EmptySrv
 import math, time, json, os, sys, shutil, argparse, random
 
 from robotmem.sdk import RobotMemory
@@ -287,8 +288,18 @@ def main():
 
     exp.destroy_node()
 
-    print("\n  暂停 3s（模拟重启）...")
-    time.sleep(3)
+    # 重置仿真 — 机器人回到起点
+    print("\n  重置仿真（机器人回到起点）...")
+    reset_node = rclpy.create_node("reset_node")
+    cli = reset_node.create_client(EmptySrv, "/reset_simulation")
+    if cli.wait_for_service(timeout_sec=3.0):
+        cli.call_async(EmptySrv.Request())
+        time.sleep(2)
+        print("  仿真已重置 ✓")
+    else:
+        print("  重置服务不可用，等待 3s ...")
+        time.sleep(3)
+    reset_node.destroy_node()
 
     # ── Session 2: 记忆导航 ──
     print("\n--- Session 2: 记忆导航 ---")

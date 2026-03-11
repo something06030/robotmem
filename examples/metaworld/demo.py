@@ -1,17 +1,20 @@
 """Meta-World push-v3 跨实例空间记忆 Demo
 
-验证: robotmem 空间回忆在 Meta-World 上的效果。
+验证: robotmem 空间回忆在 Meta-World push 上的效果。
 
 机制:
-  - 50 个 task instance（不同 obj/target 位置）
-  - Phase A: 启发式 + 噪声（无记忆）
-  - Phase B: 同策略 + learn（积累经验）
-  - Phase C: recall + 记忆驱动参数（空间回忆）
-  - 空间回忆: 按 obj_pos 检索最近的成功经验
+  - 多个 task instance（不同 obj/target 位置）
+  - Phase A: 启发式 + 默认参数 + 噪声（基线）
+  - Phase B: 随机参数探索 + learn（积累经验）
+  - Phase C: recall + 记忆驱动参数（空间回忆最近成功经验）
+
+核心差异点（vs FetchPush）:
+  - Meta-World 每个 instance 固定初始状态 → 参数探索更关键
+  - spatial_sort 按 object 初始位置检索 → 相似布局用相似策略
 
 运行:
   source .venv-pusht/bin/activate
-  PYTHONPATH=src python examples/metaworld/demo.py [--seed 42] [--episodes 100]
+  PYTHONPATH=src python examples/metaworld/demo.py [--seed 42] [--episodes 5]
 
 注: 这是 API 教程。严格实验请参考 experiment.py。
 """
@@ -23,7 +26,6 @@ import os
 import random
 import shutil
 import sys
-import time
 
 import numpy as np
 
@@ -41,34 +43,35 @@ from policies import MetaWorldPushPolicy, MetaWorldMemoryPolicy
 DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".robotmem-metaworld")
 DB_PATH = os.path.join(DB_DIR, "memory.db")
 COLLECTION = "metaworld-push"
-NOISE_SCALE = 0.3
 MEMORY_WEIGHT = 0.3
+RECALL_N = 3
 
 
-def build_context(obs_initial, target_pos, final_reward, success, approach_offset, push_speed):
+def build_context(obs_initial, target_pos, total_reward, success,
+                  approach_offset, push_speed, noise_scale):
+    """构建 context — params/spatial/task 三区域"""
     return {
         "params": {
             "approach_offset": {"value": float(approach_offset), "type": "scalar"},
             "push_speed": {"value": float(push_speed), "type": "scalar"},
+            "noise_scale": {"value": float(noise_scale), "type": "scalar"},
         },
         "spatial": {
-            "x": float(obs_initial[4]),  # obj_x
-            "y": float(obs_initial[5]),  # obj_y
-            "z": float(obs_initial[6]),  # obj_z
+            "object_position": [float(obs_initial[4]), float(obs_initial[5]), float(obs_initial[6])],
         },
         "task": {
             "name": "push-v3",
-            "reward": float(final_reward),
+            "reward": float(total_reward),
             "success": bool(success),
             "target": [float(v) for v in target_pos],
         },
     }
 
 
-def run_episode(env, policy, target_pos, learn_mem=None, session_id=None, policy_params=None):
+def run_episode(env, policy, target_pos, learn_mem=None, session_id=None):
     """执行单个 episode，返回 (success, total_reward)"""
-    obs_initial, _ = env.reset()
-    obs = obs_initial
+    obs, _ = env.reset()
+    obs_initial = obs.copy()
     total_reward = 0.0
     success = False
 
@@ -82,13 +85,10 @@ def run_episode(env, policy, target_pos, learn_mem=None, session_id=None, policy
             break
 
     if learn_mem is not None:
-        approach_offset = getattr(policy, "approach_offset", 0.05)
-        push_speed = getattr(policy, "push_speed", 8.0)
-        if policy_params:
-            approach_offset = policy_params.get("approach_offset", approach_offset)
-            push_speed = policy_params.get("push_speed", push_speed)
-
-        ctx = build_context(obs_initial, target_pos, total_reward, success, approach_offset, push_speed)
+        ctx = build_context(
+            obs_initial, target_pos, total_reward, success,
+            policy.approach_offset, policy.push_speed, policy.noise_scale,
+        )
         learn_mem.learn(
             insight=f"push-v3: reward={total_reward:.1f}, success={success}",
             context=ctx,
@@ -98,45 +98,55 @@ def run_episode(env, policy, target_pos, learn_mem=None, session_id=None, policy
     return success, total_reward
 
 
-def run_phase_on_instances(env_cls, tasks, policy_factory, episodes_per_instance,
-                           learn_mem=None, session_id=None, recall_mem=None, label=""):
-    """在多个 task instance 上运行，返回总成功率"""
+def run_phase(env_cls, tasks, episodes_per_instance, phase, mem=None, session_id=None):
+    """在多个 task instance 上运行一个 Phase"""
     total_success = 0
     total_episodes = 0
 
-    for i, task in enumerate(tasks):
+    for task in tasks:
         env = env_cls()
         env.set_task(task)
 
         try:
             for ep in range(episodes_per_instance):
-                obs_peek, _ = env.reset()
+                env.reset()
                 target = env.unwrapped._target_pos.copy()
+                obs_peek = env.reset()[0]
                 obj_pos = obs_peek[4:7]
 
-                # 如果有 recall_mem，按空间检索
-                if recall_mem is not None:
-                    recalled = recall_mem.recall(
+                if phase == "A":
+                    # 默认参数 + 噪声
+                    policy = MetaWorldPushPolicy(noise_scale=0.3)
+
+                elif phase == "B":
+                    # 随机参数探索
+                    policy = MetaWorldPushPolicy(
+                        noise_scale=np.random.uniform(0.1, 0.5),
+                        approach_offset=np.random.uniform(0.02, 0.10),
+                        push_speed=np.random.uniform(4.0, 12.0),
+                    )
+
+                elif phase == "C":
+                    # 空间回忆 → 记忆驱动参数
+                    recalled = mem.recall(
                         "successful push strategy",
-                        n=3,
+                        n=RECALL_N,
                         context_filter={"task.success": True},
                         spatial_sort={
-                            "field": "spatial",
+                            "field": "spatial.object_position",
                             "origin": [float(obj_pos[0]), float(obj_pos[1]), float(obj_pos[2])],
                         },
                     )
                     policy = MetaWorldMemoryPolicy(
-                        policy_factory(), recalled, MEMORY_WEIGHT,
+                        MetaWorldPushPolicy(noise_scale=0.3),
+                        recalled,
+                        MEMORY_WEIGHT,
                     )
-                else:
-                    policy = policy_factory()
 
+                learn_mem = mem if phase == "B" else None
                 success, reward = run_episode(
                     env, policy, target,
-                    learn_mem=learn_mem,
-                    session_id=session_id,
-                    policy_params={"approach_offset": policy.base.approach_offset if hasattr(policy, "base") else 0.05,
-                                   "push_speed": policy.base.push_speed if hasattr(policy, "base") else 8.0},
+                    learn_mem=learn_mem, session_id=session_id,
                 )
                 total_success += int(success)
                 total_episodes += 1
@@ -144,15 +154,14 @@ def run_phase_on_instances(env_cls, tasks, policy_factory, episodes_per_instance
             env.close()
 
     rate = total_success / total_episodes if total_episodes > 0 else 0
-    print(f"  {label}: {total_success}/{total_episodes} ({rate:.1%})")
-    return rate
+    return rate, total_success, total_episodes
 
 
 def main():
     parser = argparse.ArgumentParser(description="Meta-World push-v3 空间记忆 Demo")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--episodes", type=int, default=3, help="每个 instance 的 episode 数")
-    parser.add_argument("--instances", type=int, default=20, help="使用多少个 task instance")
+    parser.add_argument("--episodes", type=int, default=5, help="每个 instance 的 episode 数")
+    parser.add_argument("--instances", type=int, default=20, help="使用的 task instance 数")
     args = parser.parse_args()
 
     seed = args.seed
@@ -173,58 +182,53 @@ def main():
     tasks = all_tasks[: args.instances]
 
     print("=" * 60)
-    print(f"Meta-World push-v3 空间记忆 Demo")
+    print("Meta-World push-v3 空间记忆 Demo")
     print(f"Seed: {seed}, Instances: {len(tasks)}, Episodes/instance: {args.episodes}")
-    print(f"Noise: {NOISE_SCALE}, Memory weight: {MEMORY_WEIGHT}")
     print("=" * 60)
 
-    def make_policy():
-        return MetaWorldPushPolicy(noise_scale=NOISE_SCALE)
-
     try:
-        # Phase A: 基线（无记忆）
-        print("\n--- Phase A: 基线（启发式 + 噪声，无记忆）---")
+        # Phase A: 基线
+        print("\n--- Phase A: 基线（默认参数 + 噪声 0.3）---")
         random.seed(seed)
         np.random.seed(seed)
-        rate_a = run_phase_on_instances(
-            env_cls, tasks, make_policy, args.episodes, label="Phase A",
-        )
+        rate_a, succ_a, total_a = run_phase(env_cls, tasks, args.episodes, "A")
+        print(f"  Phase A: {succ_a}/{total_a} ({rate_a:.1%})")
 
-        # Phase B: 写入记忆
-        print("\n--- Phase B: 探索 + 写入记忆 ---")
+        # Phase B: 参数探索 + 学习
+        print("\n--- Phase B: 随机参数探索 + learn ---")
         random.seed(seed + 1000)
         np.random.seed(seed + 1000)
         with mem.session(context={"task": "push-v3"}) as sid:
-            rate_b = run_phase_on_instances(
-                env_cls, tasks, make_policy, args.episodes,
-                learn_mem=mem, session_id=sid, label="Phase B",
+            rate_b, succ_b, total_b = run_phase(
+                env_cls, tasks, args.episodes, "B", mem=mem, session_id=sid,
             )
+        print(f"  Phase B: {succ_b}/{total_b} ({rate_b:.1%})")
 
-        # Phase C: 空间回忆 + 记忆驱动策略
-        print("\n--- Phase C: 空间回忆 + 记忆驱动策略 ---")
+        # Phase C: 空间回忆
+        print("\n--- Phase C: 空间回忆 + 记忆驱动参数 ---")
         random.seed(seed + 2000)
         np.random.seed(seed + 2000)
-        rate_c = run_phase_on_instances(
-            env_cls, tasks, make_policy, args.episodes,
-            recall_mem=mem, label="Phase C",
+        rate_c, succ_c, total_c = run_phase(
+            env_cls, tasks, args.episodes, "C", mem=mem,
         )
+        print(f"  Phase C: {succ_c}/{total_c} ({rate_c:.1%})")
 
         # 结果
         delta = rate_c - rate_a
         print(f"\n{'=' * 60}")
         print("结果:")
         print(f"  Phase A (基线):     {rate_a:.1%}")
-        print(f"  Phase B (写入):     {rate_b:.1%}")
+        print(f"  Phase B (探索):     {rate_b:.1%}")
         print(f"  Phase C (记忆回忆): {rate_c:.1%}")
         print(f"  Delta (C - A):      {delta:+.1%}")
         print(f"{'=' * 60}")
 
         if delta > 0.05:
-            print(f"记忆提升 {delta:.1%} — 空间回忆对 Meta-World push 有效")
+            print(f"空间记忆提升 {delta:.1%} — 有效")
         elif delta > 0:
-            print(f"记忆提升 {delta:.1%} — 小幅提升")
+            print(f"空间记忆提升 {delta:.1%} — 小幅")
         else:
-            print(f"记忆未提升 ({delta:.1%})")
+            print(f"空间记忆未提升 ({delta:.1%})")
 
         print("\n注: 这是 API 教程，严格实验请参考 experiment.py")
 
