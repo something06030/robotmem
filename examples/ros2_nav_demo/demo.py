@@ -21,7 +21,6 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from std_srvs.srv import Empty as EmptySrv
 import math, time, json, os, sys, shutil, argparse, random
 
 from robotmem.sdk import RobotMemory
@@ -288,25 +287,15 @@ def main():
 
     exp.destroy_node()
 
-    # 重置仿真 — 机器人回到起点
-    print("\n  重置仿真（机器人回到起点）...")
-    reset_node = rclpy.create_node("reset_node")
-    cli = reset_node.create_client(EmptySrv, "/reset_simulation")
-    if cli.wait_for_service(timeout_sec=3.0):
-        cli.call_async(EmptySrv.Request())
-        time.sleep(2)
-        print("  仿真已重置 ✓")
-    else:
-        print("  重置服务不可用，等待 3s ...")
-        time.sleep(3)
-    reset_node.destroy_node()
+    print("\n  暂停 2s（模拟新任务：返回出发点）...")
+    time.sleep(2)
 
-    # ── Session 2: 记忆导航 ──
-    print("\n--- Session 2: 记忆导航 ---")
+    # ── Session 2: 记忆导航（反转航点，原路返回） ──
+    print("\n--- Session 2: 记忆返航 ---")
     recalled_wps = []
     with RobotMemory(db_path=DB_PATH, collection=COLLECTION,
                      embed_backend="none") as mem:
-        with mem.session(context={"task": "navigation", "phase": "memory"}) as sid:
+        with mem.session(context={"task": "navigation", "phase": "return"}) as sid:
             results = mem.recall("导航路线 航点")
             print(f"  recall: {len(results)} 条记忆")
             for r in results:
@@ -316,8 +305,8 @@ def main():
                 if isinstance(ctx, dict):
                     w = ctx.get("spatial", {}).get("waypoints", [])
                     if w:
-                        recalled_wps = [tuple(p) for p in w]
-                        print(f"  提取航点: {len(recalled_wps)}")
+                        recalled_wps = [tuple(p) for p in w][::-1]  # 反转：原路返回
+                        print(f"  提取航点: {len(recalled_wps)}（反转，原路返回）")
                         break
 
     if not recalled_wps:
@@ -339,12 +328,13 @@ def main():
     print("\n" + "=" * 55)
     print("结果对比")
     print("=" * 55)
-    print(f"  Session 1 (探索): {e_time:6.1f}s  {e_dist:6.2f}m")
-    print(f"  Session 2 (记忆): {n_time:6.1f}s  {n_dist:6.2f}m")
+    print(f"  Session 1 (探索):   {e_time:6.1f}s  {e_dist:6.2f}m  (随机探索)")
+    print(f"  Session 2 (返航):   {n_time:6.1f}s  {n_dist:6.2f}m  (记忆导航)")
     if e_time > 0:
-        print(f"  时间节省:        {(1 - n_time / e_time) * 100:6.1f}%")
+        print(f"  时间节省:          {(1 - n_time / e_time) * 100:6.1f}%")
     if e_dist > 0:
-        print(f"  距离节省:        {(1 - n_dist / e_dist) * 100:6.1f}%")
+        print(f"  距离节省:          {(1 - n_dist / e_dist) * 100:6.1f}%")
+    print(f"\n  证明: 走过的路不用再走第二次 — 记忆驱动直接返航")
     print(f"\n  DB: {DB_DIR}")
 
 
