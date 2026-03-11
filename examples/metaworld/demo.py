@@ -134,7 +134,7 @@ def run_phase(env_cls, tasks, episodes_per_instance, phase, mem=None, session_id
                         context_filter={"task.success": True},
                         spatial_sort={
                             "field": "spatial.object_position",
-                            "origin": [float(obj_pos[0]), float(obj_pos[1]), float(obj_pos[2])],
+                            "target": [float(obj_pos[0]), float(obj_pos[1]), float(obj_pos[2])],
                         },
                     )
                     policy = MetaWorldMemoryPolicy(
